@@ -1,0 +1,60 @@
+%% Personal AI Assistant overview: system context + target v1 containers.
+%% Render: npx -y @mermaid-js/mermaid-cli@11 -i architecture/overview.mmd -o architecture/overview.png -b white -s 2
+flowchart LR
+  subgraph phone["iPhone"]
+    app["Home Screen web app<br/>(Expo app from Day 8)"]
+    shortcuts["Apple Health<br/>via iOS Shortcuts"]
+  end
+
+  subgraph sp["Personal AI Assistant · AWS us-east-1"]
+    apigw["API Gateway"]
+    api["FastAPI on ECS"]
+    live["IoT Core → Kinesis<br/>live path"]
+    sfn["Step Functions<br/>overnight batch"]
+    crisis{"Crisis keyword<br/>screen"}
+    subgraph ac["Bedrock AgentCore"]
+      rt["Runtime<br/>LangGraph supervisor +<br/>Strands specialists"]
+      gw["Gateway"]
+    end
+    mcp["MCP servers<br/>read-only first"]
+    subgraph data["Data"]
+      pg[("Postgres<br/>+ pgvector")]
+      ddb[("DynamoDB")]
+      s3[("S3")]
+    end
+  end
+
+  subgraph ext["External systems"]
+    llm["Claude<br/>Anthropic API now · Bedrock later"]
+    cal["Calendar (ICS)"]
+    mail["Email (IMAP)"]
+    push["Web Push service"]
+    obs["Langfuse + CloudWatch"]
+    l988["988 Lifeline<br/>referral only"]
+  end
+
+  app -->|"HTTPS"| apigw --> api
+  shortcuts -->|"daily metrics"| live --> api
+  api -->|"user text"| crisis
+  sfn -->|"nightly plans + Weekly Score"| crisis
+  sfn --> s3
+  crisis -->|"no match"| rt
+  crisis -.->|"match: show 988 message,<br/>no model call"| l988
+  rt --> llm
+  rt --> gw --> mcp
+  mcp --> cal
+  mcp --> mail
+  api --> pg
+  api --> ddb
+  api -->|"daily plan"| push -.-> app
+  api -.->|"OTel"| obs
+  rt -.->|"OTel"| obs
+
+  classDef core fill:#e8f0fe,stroke:#3b6fd8,color:#111
+  classDef store fill:#fff4e0,stroke:#d08a1a,color:#111
+  classDef external fill:#f1f1f1,stroke:#888,color:#111
+  classDef safety fill:#fde8e8,stroke:#c0392b,color:#111
+  class apigw,api,live,sfn,rt,gw,mcp core
+  class pg,ddb,s3 store
+  class llm,cal,mail,push,obs,app,shortcuts external
+  class crisis,l988 safety
